@@ -145,6 +145,16 @@ export default function App() {
   // In a real app, this would come from authentication state management
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
 
+  // Auto-login for demo purposes
+  React.useEffect(() => {
+    // Show login screen for 3 seconds, then auto-login
+    const timer = setTimeout(() => {
+      setIsLoggedIn(true);
+    }, 3000); // 3 second delay to show login screen
+
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <>
       <StatusBar backgroundColor="#4CAF50" barStyle="light-content" />
