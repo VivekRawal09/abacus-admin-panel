@@ -137,28 +137,20 @@ const AbacusScreen = ({ navigation }) => {
     return () => subscription?.remove();
   }, []);
 
-  // Correct abacus calculation with proper place values
+  // Correct abacus calculation with proper place values - matching Android logic
   const calculateValue = () => {
     let total = 0;
+    const centerIndex = 4; // Units column index
     
     Object.keys(abacusState).forEach((columnIndex) => {
       const column = abacusState[columnIndex];
       const colIndex = parseInt(columnIndex);
       
-      let multiplier;
-      switch (colIndex) {
-        case 0: multiplier = 10000; break;
-        case 1: multiplier = 1000; break;
-        case 2: multiplier = 100; break;
-        case 3: multiplier = 10; break;
-        case 4: multiplier = 1; break;
-        case 5: multiplier = 0.1; break;
-        case 6: multiplier = 0.01; break;
-        case 7: multiplier = 0.001; break;
-        case 8: multiplier = 0.0001; break;
-        default: multiplier = 1;
-      }
+      // Calculate power based on distance from center (units column)
+      const power = centerIndex - colIndex;
+      const multiplier = Math.pow(10, power);
       
+      // Calculate column value (heaven bead = 5, each earth bead = 1)
       let columnValue = 0;
       if (column.heaven) columnValue += 5;
       column.earth.forEach((bead) => {
@@ -191,22 +183,35 @@ const AbacusScreen = ({ navigation }) => {
         }
       };
       newState[columnIndex].value = calculateRodValue(newState[columnIndex]);
+      
+      // Calculate total value immediately
+      let total = 0;
+      const centerIndex = 4;
+      Object.keys(newState).forEach((colIndex) => {
+        const column = newState[colIndex];
+        const power = centerIndex - parseInt(colIndex);
+        const multiplier = Math.pow(10, power);
+        total += column.value * multiplier;
+      });
+      setCurrentValue(total);
+      
       return newState;
     });
-    setTimeout(calculateValue, 50);
   };
 
   const toggleEarthBead = (columnIndex, beadIndex) => {
     setAbacusState(prev => {
       const newEarthBeads = [...prev[columnIndex].earth];
+      const currentBeadState = newEarthBeads[beadIndex];
       
-      if (newEarthBeads[beadIndex]) {
-        for (let i = beadIndex; i < newEarthBeads.length; i++) {
-          newEarthBeads[i] = false;
-        }
-      } else {
-        for (let i = 0; i <= beadIndex; i++) {
+      // Apply the exact same logic as the Android code
+      for (let i = 0; i < 4; i++) {
+        if (i < beadIndex) {
           newEarthBeads[i] = true;
+        } else if (i > beadIndex) {
+          newEarthBeads[i] = false;
+        } else {
+          newEarthBeads[i] = !currentBeadState;
         }
       }
       
@@ -218,9 +223,20 @@ const AbacusScreen = ({ navigation }) => {
         }
       };
       newState[columnIndex].value = calculateRodValue(newState[columnIndex]);
+      
+      // Calculate total value immediately
+      let total = 0;
+      const centerIndex = 4;
+      Object.keys(newState).forEach((colIndex) => {
+        const column = newState[colIndex];
+        const power = centerIndex - parseInt(colIndex);
+        const multiplier = Math.pow(10, power);
+        total += column.value * multiplier;
+      });
+      setCurrentValue(total);
+      
       return newState;
     });
-    setTimeout(calculateValue, 50);
   };
 
   const resetAbacus = () => {
@@ -308,14 +324,14 @@ const AbacusScreen = ({ navigation }) => {
       availableWidth = availableWidth * 0.6;
     }
     
-    availableWidth = availableWidth * 0.95;
-    const availableHeight = height * 0.9;
+    availableWidth = availableWidth * 0.98; // Use more of the available space
+    const availableHeight = height * 0.95; // Use more height
     
     const columnWidth = availableWidth / totalColumns;
-    const maxBeadSize = Math.min(columnWidth * 0.7, availableHeight / 8);
+    const maxBeadSize = Math.min(columnWidth * 0.8, availableHeight / 8);
     
     return {
-      beadSize: Math.max(maxBeadSize, 25),
+      beadSize: Math.max(maxBeadSize, 30),
       columnWidth,
       frameHeight: availableHeight,
       sidebarPixelWidth,
@@ -449,7 +465,7 @@ const AbacusScreen = ({ navigation }) => {
           try {
             await ScreenOrientation.unlockAsync();
             StatusBar.setHidden(false);
-            setIsLandscape(false);
+            setIsLandscreen(false);
           } catch (unlockError) {
             console.log('Cleanup orientation unlock failed:', unlockError);
           }
@@ -475,6 +491,7 @@ const AbacusScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* ONLY show hamburger in free mode - NO OTHER UI elements on abacus area */}
       {mode === 'free' && (
         <TouchableOpacity 
           style={styles.hamburgerButton}
@@ -484,80 +501,72 @@ const AbacusScreen = ({ navigation }) => {
         </TouchableOpacity>
       )}
 
-      {mode === 'exercise' && (
-        <View style={styles.exerciseTopBar}>
-          <TouchableOpacity style={styles.exerciseBackButton} onPress={() => setMode('free')}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-            <Text style={styles.exerciseBackText}>Back to Free Mode</Text>
-          </TouchableOpacity>
-          <Text style={styles.exerciseTopTitle}>Exercise Mode</Text>
-          <TouchableOpacity style={styles.exerciseHomeButton} onPress={handleBackPress}>
-            <Ionicons name="home" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      )}
-
+      {/* Main Content Area */}
       <View style={styles.mainContent}>
-        <Animated.View style={[
-          styles.sidebar,
-          {
-            width: sidebarPixelWidth,
-            transform: [{
-              translateX: sidebarAnimation.interpolate({
-                inputRange: [0, 0.6],
-                outputRange: [-sidebarPixelWidth, 0],
-              })
-            }]
-          }
-        ]}>
-          <View style={styles.sidebarContent}>
-            <TouchableOpacity style={styles.sidebarBackButton} onPress={handleBackPress}>
-              <Ionicons name="arrow-back" size={24} color="#fff" />
-              <Text style={styles.sidebarBackText}>Back to Home</Text>
-            </TouchableOpacity>
-
-            <Text style={styles.sidebarTitle}>Virtual Abacus</Text>
-
-            <View style={styles.sidebarSection}>
-              <Text style={styles.sidebarSectionTitle}>Mode</Text>
-              <TouchableOpacity
-                style={[styles.sidebarButton, mode === 'free' && styles.sidebarButtonActive]}
-                onPress={() => { setMode('free'); toggleSidebar(); }}
-              >
-                <Ionicons name="calculator" size={20} color={mode === 'free' ? '#4CAF50' : '#fff'} />
-                <Text style={[styles.sidebarButtonText, mode === 'free' && styles.sidebarButtonTextActive]}>
-                  Free Practice
-                </Text>
+        {/* Sliding Sidebar - ONLY for free mode */}
+        {mode === 'free' && (
+          <Animated.View style={[
+            styles.sidebar,
+            {
+              width: sidebarPixelWidth,
+              transform: [{
+                translateX: sidebarAnimation.interpolate({
+                  inputRange: [0, 0.6],
+                  outputRange: [-sidebarPixelWidth, 0],
+                })
+              }]
+            }
+          ]}>
+            <View style={styles.sidebarContent}>
+              <TouchableOpacity style={styles.sidebarBackButton} onPress={handleBackPress}>
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Text style={styles.sidebarBackText}>Back to Home</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.sidebarButton, mode === 'exercise' && styles.sidebarButtonActive]}
-                onPress={startExercise}
-              >
-                <Ionicons name="school" size={20} color={mode === 'exercise' ? '#4CAF50' : '#fff'} />
-                <Text style={[styles.sidebarButtonText, mode === 'exercise' && styles.sidebarButtonTextActive]}>
-                  Exercise Mode
-                </Text>
-              </TouchableOpacity>
-            </View>
 
-            <View style={styles.sidebarSection}>
-              <Text style={styles.sidebarSectionTitle}>Actions</Text>
-              <TouchableOpacity style={styles.sidebarButton} onPress={() => { resetAbacus(); toggleSidebar(); }}>
-                <Ionicons name="refresh" size={20} color="#fff" />
-                <Text style={styles.sidebarButtonText}>Reset Abacus</Text>
-              </TouchableOpacity>
-            </View>
+              <Text style={styles.sidebarTitle}>Virtual Abacus</Text>
 
-            {currentValue > 0 && (
-              <View style={styles.sidebarValueSection}>
-                <Text style={styles.sidebarValueLabel}>Current Value:</Text>
-                <Text style={styles.sidebarValueText}>{currentValue.toFixed(4)}</Text>
+              <View style={styles.sidebarSection}>
+                <Text style={styles.sidebarSectionTitle}>Mode</Text>
+                <TouchableOpacity
+                  style={[styles.sidebarButton, mode === 'free' && styles.sidebarButtonActive]}
+                  onPress={() => { setMode('free'); toggleSidebar(); }}
+                >
+                  <Ionicons name="calculator" size={20} color={mode === 'free' ? '#4CAF50' : '#fff'} />
+                  <Text style={[styles.sidebarButtonText, mode === 'free' && styles.sidebarButtonTextActive]}>
+                    Free Practice
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.sidebarButton, mode === 'exercise' && styles.sidebarButtonActive]}
+                  onPress={startExercise}
+                >
+                  <Ionicons name="school" size={20} color={mode === 'exercise' ? '#4CAF50' : '#fff'} />
+                  <Text style={[styles.sidebarButtonText, mode === 'exercise' && styles.sidebarButtonTextActive]}>
+                    Exercise Mode
+                  </Text>
+                </TouchableOpacity>
               </View>
-            )}
-          </View>
-        </Animated.View>
 
+              <View style={styles.sidebarSection}>
+                <Text style={styles.sidebarSectionTitle}>Actions</Text>
+                <TouchableOpacity style={styles.sidebarButton} onPress={() => { resetAbacus(); toggleSidebar(); }}>
+                  <Ionicons name="refresh" size={20} color="#fff" />
+                  <Text style={styles.sidebarButtonText}>Reset Abacus</Text>
+                </TouchableOpacity>
+              </View>
+
+              {currentValue > 0 && (
+                <View style={styles.sidebarValueSection}>
+                  <Text style={styles.sidebarValueLabel}>Current Value:</Text>
+                  <Text style={styles.sidebarValueText}>{currentValue.toFixed(4)}</Text>
+                </View>
+              )}
+            </View>
+          </Animated.View>
+        )}
+
+        {/* PURE ABACUS AREA - NO EXTRA UI ELEMENTS */}
         <View style={[
           styles.abacusArea,
           {
@@ -598,35 +607,29 @@ const AbacusScreen = ({ navigation }) => {
                 renderFullScreenAbacusColumn(parseInt(columnIndex))
               )}
             </View>
-          </View>
-
-          <View style={styles.bottomIndicators}>
-            <View style={styles.indicatorRow}>
-              {Object.keys(abacusState).map((columnIndex) => {
-                const column = abacusState[columnIndex];
-                const isActive = column.heaven || column.earth.some(bead => bead);
-                
-                return (
-                  <View key={columnIndex} style={[
-                    styles.bottomColumnIndicator,
-                    isActive && styles.bottomColumnIndicatorActive
-                  ]}>
-                    <Text style={[
-                      styles.bottomIndicatorValue,
-                      isActive && styles.bottomIndicatorValueActive
-                    ]}>
-                      {column.value || 0}
-                    </Text>
-                  </View>
-                );
-              })}
+            
+            {/* Simple bottom indicator showing current value - minimal */}
+            <View style={styles.currentValueIndicator}>
+              <Text style={styles.currentValueText}>{currentValue}</Text>
             </View>
           </View>
         </View>
 
+        {/* ALL CONTROLS IN EXERCISE PANEL - 40% of screen */}
         {mode === 'exercise' && (
           <View style={styles.exercisePanel}>
             <ScrollView style={styles.exercisePanelContent} showsVerticalScrollIndicator={false}>
+              {/* Back to Free Mode and Home buttons at top */}
+              <View style={styles.exerciseHeader}>
+                <TouchableOpacity style={styles.backToFreeButton} onPress={() => setMode('free')}>
+                  <Ionicons name="arrow-back" size={20} color="#fff" />
+                  <Text style={styles.backToFreeText}>Free Mode</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.homeButton} onPress={handleBackPress}>
+                  <Ionicons name="home" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
               {exerciseMode && (
                 <View style={styles.currentProblemSection}>
                   <Text style={styles.problemSectionTitle}>Current Problem</Text>
@@ -700,6 +703,7 @@ const AbacusScreen = ({ navigation }) => {
         )}
       </View>
 
+      {/* Overlay to close sidebar when tapping outside - ONLY in free mode */}
       {sidebarWidth > 0 && mode === 'free' && (
         <TouchableOpacity 
           style={styles.sidebarOverlay}
@@ -752,34 +756,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-  },
-  exerciseTopBar: {
-    backgroundColor: '#4CAF50',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    paddingTop: 35,
-    height: 70,
-  },
-  exerciseBackButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-  },
-  exerciseBackText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  exerciseTopTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  exerciseHomeButton: {
-    padding: 8,
   },
   mainContent: {
     flex: 1,
@@ -880,16 +856,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     zIndex: 998,
   },
+  // PURE ABACUS AREA - NO EXTRA UI
   abacusArea: {
     position: 'relative',
+    flex: 1,
   },
   fullScreenAbacusFrame: {
     flex: 1,
     backgroundColor: '#8D6E63',
-    marginHorizontal: 8,
-    marginVertical: 10,
+    margin: 5,
     borderRadius: 15,
-    padding: 8,
+    padding: 10,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -902,8 +879,8 @@ const styles = StyleSheet.create({
   columnLabelsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 8,
-    marginTop: 15,
+    marginBottom: 10,
+    marginTop: 10,
   },
   columnLabelContainer: {
     flex: 1,
@@ -912,7 +889,7 @@ const styles = StyleSheet.create({
   fullScreenColumnLabel: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
   },
   fullScreenAbacusBody: {
@@ -959,38 +936,23 @@ const styles = StyleSheet.create({
     zIndex: -1,
     borderRadius: 2,
   },
-  bottomIndicators: {
+  // Simple current value indicator at bottom
+  currentValueIndicator: {
     position: 'absolute',
-    bottom: 15,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(76, 175, 80, 0.9)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  indicatorRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '90%',
-  },
-  bottomColumnIndicator: {
-    width: 35,
-    height: 25,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 2,
-  },
-  bottomColumnIndicatorActive: {
-    backgroundColor: '#4CAF50',
-  },
-  bottomIndicatorValue: {
-    fontSize: 12,
-    color: '#BDBDBD',
-    fontWeight: 'bold',
-  },
-  bottomIndicatorValueActive: {
+  currentValueText: {
     color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
+  // EXERCISE PANEL - ALL CONTROLS HERE
   exercisePanel: {
     width: '40%',
     backgroundColor: '#37474F',
@@ -1000,6 +962,34 @@ const styles = StyleSheet.create({
   exercisePanelContent: {
     flex: 1,
     padding: 16,
+  },
+  exerciseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#4CAF50',
+  },
+  backToFreeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  backToFreeText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 8,
+    fontWeight: 'bold',
+  },
+  homeButton: {
+    backgroundColor: '#FF5722',
+    padding: 10,
+    borderRadius: 8,
   },
   currentProblemSection: {
     marginBottom: 20,
