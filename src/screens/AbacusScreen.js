@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -41,25 +42,51 @@ const AbacusScreen = ({ navigation }) => {
     { question: "15 + 7", answer: 22 },
   ];
 
+  // Use focus effect to handle orientation properly
+  useFocusEffect(
+    React.useCallback(() => {
+      // Set landscape when screen is focused
+      const setLandscape = async () => {
+        try {
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+          StatusBar.setHidden(true);
+          setIsLandscape(true);
+        } catch (error) {
+          console.log('Orientation lock failed:', error);
+        }
+      };
+      
+      setLandscape();
+
+      // Reset to portrait when screen loses focus
+      return () => {
+        const resetPortrait = async () => {
+          try {
+            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+            StatusBar.setHidden(false);
+            setIsLandscape(false);
+          } catch (error) {
+            console.log('Orientation reset failed:', error);
+          }
+        };
+        resetPortrait();
+      };
+    }, [])
+  );
+
   useEffect(() => {
-    // Force landscape orientation when component mounts
-    const setLandscapeOrientation = async () => {
-      try {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-        StatusBar.setHidden(true);
-        setIsLandscape(true);
-      } catch (error) {
-        console.log('Orientation lock failed:', error);
-      }
-    };
-
-    setLandscapeOrientation();
-
-    // Cleanup function
+    // Cleanup function to reset orientation when component unmounts
     return () => {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
-      StatusBar.setHidden(false);
-      setIsLandscape(false);
+      const resetOrientation = async () => {
+        try {
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+          StatusBar.setHidden(false);
+          setIsLandscape(false);
+        } catch (error) {
+          console.log('Orientation reset failed:', error);
+        }
+      };
+      resetOrientation();
     };
   }, []);
 

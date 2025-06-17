@@ -47,10 +47,16 @@ const VideoPlayerScreen = ({ navigation, route }) => {
     StatusBar.setHidden(true);
     
     return () => {
-      // Show status bar when component unmounts
-      StatusBar.setHidden(false);
-      // Reset orientation to portrait when leaving
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+      // Reset orientation and status bar when component unmounts
+      const resetOrientation = async () => {
+        try {
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+          StatusBar.setHidden(false);
+        } catch (error) {
+          console.log('Orientation reset failed:', error);
+        }
+      };
+      resetOrientation();
     };
   }, []);
 
