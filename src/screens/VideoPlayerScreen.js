@@ -50,10 +50,18 @@ const VideoPlayerScreen = ({ navigation, route }) => {
       // Reset orientation and status bar when component unmounts
       const resetOrientation = async () => {
         try {
-          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+          // Use PORTRAIT_UP instead of PORTRAIT for iOS compatibility
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
           StatusBar.setHidden(false);
         } catch (error) {
-          console.log('Orientation reset failed:', error);
+          console.log('Orientation reset failed, trying unlock:', error);
+          // Fallback: try unlocking orientation instead
+          try {
+            await ScreenOrientation.unlockAsync();
+            StatusBar.setHidden(false);
+          } catch (unlockError) {
+            console.log('Orientation unlock failed:', unlockError);
+          }
         }
       };
       resetOrientation();
@@ -83,13 +91,15 @@ const VideoPlayerScreen = ({ navigation, route }) => {
   const toggleFullscreen = async () => {
     try {
       if (isFullscreen) {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
       } else {
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
       }
       setIsFullscreen(!isFullscreen);
     } catch (error) {
       console.log('Orientation change failed:', error);
+      // Fallback: still toggle fullscreen state even if orientation fails
+      setIsFullscreen(!isFullscreen);
     }
   };
 

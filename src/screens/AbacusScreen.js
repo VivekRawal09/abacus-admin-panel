@@ -42,6 +42,29 @@ const AbacusScreen = ({ navigation }) => {
     { question: "15 + 7", answer: 22 },
   ];
 
+  // Handle back button press
+  const handleBackPress = async () => {
+    try {
+      // Use PORTRAIT_UP instead of PORTRAIT for iOS compatibility
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      StatusBar.setHidden(false);
+      // Small delay to ensure orientation change completes
+      setTimeout(() => {
+        navigation.goBack();
+      }, 100);
+    } catch (error) {
+      console.log('Orientation reset failed:', error);
+      // Fallback: try unlocking orientation instead
+      try {
+        await ScreenOrientation.unlockAsync();
+        StatusBar.setHidden(false);
+      } catch (unlockError) {
+        console.log('Orientation unlock failed:', unlockError);
+      }
+      navigation.goBack();
+    }
+  };
+
   // Use focus effect to handle orientation properly
   useFocusEffect(
     React.useCallback(() => {
@@ -62,11 +85,19 @@ const AbacusScreen = ({ navigation }) => {
       return () => {
         const resetPortrait = async () => {
           try {
-            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+            // Try PORTRAIT_UP first, then fallback to unlock
+            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
             StatusBar.setHidden(false);
             setIsLandscape(false);
           } catch (error) {
-            console.log('Orientation reset failed:', error);
+            console.log('Portrait lock failed, trying unlock:', error);
+            try {
+              await ScreenOrientation.unlockAsync();
+              StatusBar.setHidden(false);
+              setIsLandscape(false);
+            } catch (unlockError) {
+              console.log('Orientation unlock failed:', unlockError);
+            }
           }
         };
         resetPortrait();
@@ -75,20 +106,44 @@ const AbacusScreen = ({ navigation }) => {
   );
 
   useEffect(() => {
+    // Add navigation listener for additional safety
+    const unsubscribe = navigation.addListener('beforeRemove', async (e) => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+        StatusBar.setHidden(false);
+      } catch (error) {
+        console.log('Navigation orientation reset failed, trying unlock:', error);
+        try {
+          await ScreenOrientation.unlockAsync();
+          StatusBar.setHidden(false);
+        } catch (unlockError) {
+          console.log('Navigation orientation unlock failed:', unlockError);
+        }
+      }
+    });
+
     // Cleanup function to reset orientation when component unmounts
     return () => {
+      unsubscribe();
       const resetOrientation = async () => {
         try {
-          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
           StatusBar.setHidden(false);
           setIsLandscape(false);
         } catch (error) {
-          console.log('Orientation reset failed:', error);
+          console.log('Cleanup orientation reset failed, trying unlock:', error);
+          try {
+            await ScreenOrientation.unlockAsync();
+            StatusBar.setHidden(false);
+            setIsLandscape(false);
+          } catch (unlockError) {
+            console.log('Cleanup orientation unlock failed:', unlockError);
+          }
         }
       };
       resetOrientation();
     };
-  }, []);
+  }, [navigation]);
 
   const calculateValue = () => {
     let total = 0;
@@ -257,7 +312,7 @@ const AbacusScreen = ({ navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={handleBackPress}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
