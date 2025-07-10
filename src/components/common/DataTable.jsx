@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import { 
   ChevronUpIcon, 
   ChevronDownIcon,
@@ -6,14 +6,18 @@ import {
   FunnelIcon,
   ArrowPathIcon,
   EllipsisVerticalIcon,
-  CheckIcon
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { Menu, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import classNames from 'classnames';
 import { TableSkeleton } from './LoadingSpinner';
 
-const DataTable = ({
+/**
+ * FIXED DataTable Component - Performance Optimized WITHOUT Breaking Changes
+ * Maintains backward compatibility while adding performance improvements
+ */
+const DataTable = memo(({
   data = [],
   columns = [],
   loading = false,
@@ -30,6 +34,9 @@ const DataTable = ({
   selectedRows = [],
   onRowSelect,
   onSelectAll,
+  // FIXED: Made these optional to maintain backward compatibility
+  isAllSelected,
+  isIndeterminate,
   actions = [],
   emptyMessage = 'No data available',
   searchPlaceholder = 'Search...',
@@ -44,16 +51,27 @@ const DataTable = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
 
-  // Handle search
-  const handleSearch = (value) => {
+  // FIXED: Calculate selection state internally if not provided
+  const calculatedAllSelected = useMemo(() => {
+    if (isAllSelected !== undefined) return isAllSelected;
+    return data.length > 0 && selectedRows.length === data.length;
+  }, [isAllSelected, data.length, selectedRows.length]);
+
+  const calculatedIndeterminate = useMemo(() => {
+    if (isIndeterminate !== undefined) return isIndeterminate;
+    return selectedRows.length > 0 && selectedRows.length < data.length;
+  }, [isIndeterminate, selectedRows.length, data.length]);
+
+  // Memoized search handler
+  const handleSearch = useCallback((value) => {
     setSearchTerm(value);
     if (onSearch) {
       onSearch(value);
     }
-  };
+  }, [onSearch]);
 
-  // Sort icons
-  const getSortIcon = (column) => {
+  // Memoized sort icon rendering
+  const getSortIcon = useCallback((column) => {
     if (!column.sortable || !sorting) return null;
     
     const isActive = sorting.column === column.key;
@@ -73,10 +91,10 @@ const DataTable = ({
     ) : (
       <ChevronDownIcon className="h-4 w-4 text-primary-600" />
     );
-  };
+  }, [sorting]);
 
-  // Handle column click for sorting
-  const handleColumnClick = (column) => {
+  // Memoized column click handler
+  const handleColumnClick = useCallback((column) => {
     if (!column.sortable || !onSort) return;
     
     let direction = 'asc';
@@ -85,10 +103,10 @@ const DataTable = ({
     }
     
     onSort(column.key, direction);
-  };
+  }, [sorting, onSort]);
 
-  // Render cell content
-  const renderCell = (item, column) => {
+  // Memoized cell renderer
+  const renderCell = useCallback((item, column) => {
     if (column.render) {
       return column.render(item[column.key], item);
     }
@@ -100,36 +118,26 @@ const DataTable = ({
     }
     
     return value;
-  };
+  }, []);
 
-  // Handle row selection
-  const handleRowSelection = (item) => {
+  // Memoized row selection handler
+  const handleRowSelection = useCallback((item) => {
     if (onRowSelect) {
       onRowSelect(item);
     }
-  };
+  }, [onRowSelect]);
 
-  // Check if all rows are selected
-  const allSelected = useMemo(() => {
-    return data.length > 0 && selectedRows.length === data.length;
-  }, [data.length, selectedRows.length]);
-
-  // Check if some rows are selected
-  const someSelected = useMemo(() => {
-    return selectedRows.length > 0 && selectedRows.length < data.length;
-  }, [selectedRows.length, data.length]);
-
-  // Handle select all
-  const handleSelectAll = () => {
+  // Memoized select all handler
+  const handleSelectAll = useCallback(() => {
     if (onSelectAll) {
-      onSelectAll(!allSelected);
+      onSelectAll(!calculatedAllSelected);
     }
-  };
+  }, [onSelectAll, calculatedAllSelected]);
 
-  // Check if row is selected
-  const isRowSelected = (item) => {
+  // Memoized row selection checker
+  const isRowSelected = useCallback((item) => {
     return selectedRows.some(selected => selected.id === item.id);
-  };
+  }, [selectedRows]);
 
   if (loading) {
     return <TableSkeleton rows={10} columns={columns.length} className={className} />;
@@ -139,13 +147,15 @@ const DataTable = ({
     return (
       <div className={classNames('bg-white rounded-lg shadow-sm border border-gray-200 p-6', className)}>
         <div className="text-center py-8">
-          <p className="text-danger-600 mb-4">{error}</p>
+          <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-400 mb-4" />
+          <h3 className="text-lg font-medium text-red-900 mb-2">Failed to Load Data</h3>
+          <p className="text-red-700 mb-4">{error}</p>
           {showRefresh && onRefresh && (
             <button
               onClick={onRefresh}
-              className="btn btn-outline"
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
             >
-              <ArrowPathIcon className="h-4 w-4 mr-2" />
+              <ArrowPathIcon className="h-4 w-4 mr-2 inline" />
               Try Again
             </button>
           )}
@@ -170,7 +180,7 @@ const DataTable = ({
                     placeholder={searchPlaceholder}
                     value={searchTerm}
                     onChange={(e) => handleSearch(e.target.value)}
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 text-sm"
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 text-sm transition-colors"
                   />
                 </div>
               )}
@@ -179,7 +189,10 @@ const DataTable = ({
               {showFilter && onFilter && (
                 <button
                   onClick={() => setFilterOpen(!filterOpen)}
-                  className="btn btn-outline"
+                  className={classNames(
+                    "btn btn-outline transition-colors",
+                    { "bg-primary-50 border-primary-300": filterOpen }
+                  )}
                 >
                   <FunnelIcon className="h-4 w-4 mr-2" />
                   Filter
@@ -188,7 +201,7 @@ const DataTable = ({
 
               {/* Selected count */}
               {selectable && selectedRows.length > 0 && (
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-600 bg-blue-50 px-3 py-1 rounded-full">
                   {selectedRows.length} selected
                 </span>
               )}
@@ -199,7 +212,7 @@ const DataTable = ({
               {showRefresh && onRefresh && (
                 <button
                   onClick={onRefresh}
-                  className="btn btn-ghost"
+                  className="btn btn-ghost hover:bg-gray-100 transition-colors"
                   title="Refresh"
                 >
                   <ArrowPathIcon className="h-4 w-4" />
@@ -214,7 +227,7 @@ const DataTable = ({
                       key={index}
                       onClick={action.onClick}
                       disabled={action.disabled}
-                      className={classNames('btn', action.className || 'btn-primary')}
+                      className={classNames('btn transition-colors', action.className || 'btn-primary')}
                     >
                       {action.icon && <action.icon className="h-4 w-4 mr-2" />}
                       {action.label}
@@ -240,9 +253,9 @@ const DataTable = ({
                   <div className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={allSelected}
+                      checked={calculatedAllSelected}
                       ref={(input) => {
-                        if (input) input.indeterminate = someSelected;
+                        if (input) input.indeterminate = calculatedIndeterminate;
                       }}
                       onChange={handleSelectAll}
                       className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
@@ -258,7 +271,7 @@ const DataTable = ({
                   className={classNames(
                     column.className,
                     {
-                      'cursor-pointer hover:bg-gray-100': column.sortable,
+                      'cursor-pointer hover:bg-gray-100 transition-colors': column.sortable,
                     }
                   )}
                   onClick={() => handleColumnClick(column)}
@@ -298,7 +311,7 @@ const DataTable = ({
                 <tr
                   key={item.id || index}
                   className={classNames(
-                    'table-row',
+                    'table-row hover:bg-gray-50 transition-colors',
                     {
                       'bg-primary-50': isRowSelected(item),
                     },
@@ -352,13 +365,17 @@ const DataTable = ({
       )}
     </div>
   );
-};
+});
 
-// Row actions dropdown menu
-const RowActionsMenu = ({ item, actions }) => {
+DataTable.displayName = 'DataTable';
+
+// FIXED: Simplified Row Actions Menu to avoid breaking changes
+const RowActionsMenu = memo(({ item, actions }) => {
+  if (!actions || actions.length === 0) return null;
+
   return (
     <Menu as="div" className="relative inline-block text-left">
-      <Menu.Button className="p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500">
+      <Menu.Button className="p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors">
         <EllipsisVerticalIcon className="h-4 w-4 text-gray-500" />
       </Menu.Button>
 
@@ -380,12 +397,12 @@ const RowActionsMenu = ({ item, actions }) => {
                     onClick={() => action.onClick(item)}
                     disabled={action.disabled?.(item)}
                     className={classNames(
-                      'flex items-center w-full px-4 py-2 text-sm text-left',
+                      'flex items-center w-full px-4 py-2 text-sm text-left transition-colors',
                       {
                         'bg-gray-100 text-gray-900': active,
                         'text-gray-700': !active,
                         'opacity-50 cursor-not-allowed': action.disabled?.(item),
-                        'text-danger-600': action.variant === 'danger',
+                        'text-danger-600 hover:bg-red-50': action.variant === 'danger',
                       }
                     )}
                   >
@@ -400,10 +417,12 @@ const RowActionsMenu = ({ item, actions }) => {
       </Transition>
     </Menu>
   );
-};
+});
 
-// Table pagination component
-const TablePagination = ({ pagination, onPageChange, onPageSizeChange }) => {
+RowActionsMenu.displayName = 'RowActionsMenu';
+
+// FIXED: Simplified Table Pagination to avoid breaking changes
+const TablePagination = memo(({ pagination, onPageChange, onPageSizeChange }) => {
   const { currentPage, totalPages, pageSize, totalItems, pageSizeOptions = [10, 20, 50, 100] } = pagination;
 
   const startItem = (currentPage - 1) * pageSize + 1;
@@ -444,7 +463,7 @@ const TablePagination = ({ pagination, onPageChange, onPageSizeChange }) => {
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
-              className="border border-gray-300 rounded-md text-sm py-1 px-2 focus:ring-primary-500 focus:border-primary-500"
+              className="border border-gray-300 rounded-md text-sm py-1 px-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
             >
               {pageSizeOptions.map(size => (
                 <option key={size} value={size}>{size}</option>
@@ -458,7 +477,7 @@ const TablePagination = ({ pagination, onPageChange, onPageSizeChange }) => {
           <button
             onClick={() => onPageChange?.(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Previous
           </button>
@@ -468,7 +487,7 @@ const TablePagination = ({ pagination, onPageChange, onPageSizeChange }) => {
               key={page}
               onClick={() => onPageChange?.(page)}
               className={classNames(
-                'px-3 py-2 text-sm font-medium rounded-md',
+                'px-3 py-2 text-sm font-medium rounded-md transition-colors',
                 {
                   'bg-primary-600 text-white': page === currentPage,
                   'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50': page !== currentPage,
@@ -482,7 +501,7 @@ const TablePagination = ({ pagination, onPageChange, onPageSizeChange }) => {
           <button
             onClick={() => onPageChange?.(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Next
           </button>
@@ -490,6 +509,8 @@ const TablePagination = ({ pagination, onPageChange, onPageSizeChange }) => {
       </div>
     </div>
   );
-};
+});
+
+TablePagination.displayName = 'TablePagination';
 
 export default DataTable;

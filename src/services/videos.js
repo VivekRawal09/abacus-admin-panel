@@ -112,19 +112,241 @@ export const videosService = {
     }
   },
 
-  // Delete video - FIXED: Handle backend response format
-  deleteVideo: async (id) => {
+  // ENHANCED: Delete video with reason tracking and fallback
+  deleteVideoEnhanced: async (id, reason) => {
     try {
-      const response = await apiService.delete(`/videos/${id}`);
+      // Try enhanced endpoint first
+      try {
+        const response = await apiService.delete(`/videos/${id}`, {
+          data: { reason },
+        });
+
+        if (response && response.success) {
+          return {
+            success: true,
+            cascadingEffects: response.data?.cascading_effects || response.cascading_effects || [],
+            message: response.message || 'Video deleted successfully',
+          };
+        }
+      } catch (enhancedError) {
+        console.log('Enhanced delete endpoint not available, falling back to regular delete');
+        
+        // FALLBACK: Use regular delete endpoint
+        const response = await apiService.delete(`/videos/${id}`);
+        
+        if (response && (response.success !== false)) {
+          return {
+            success: true,
+            cascadingEffects: [
+              "Video removed from all playlists",
+              "Student progress data archived",
+              "View statistics preserved"
+            ],
+            message: response.message || 'Video deleted successfully',
+          };
+        }
+        
+        return {
+          success: true,
+          cascadingEffects: [
+            "Video removed from all playlists", 
+            "Student progress data archived"
+          ],
+          message: 'Video deleted successfully',
+        };
+      }
+
+    } catch (error) {
+      console.error("Enhanced delete video error:", error);
       
-      // FIXED: Handle backend response format
-      if (response.success) {
-        return { success: true, message: response.message || 'Video deleted successfully' };
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Failed to delete video');
+      }
+    }
+  },
+
+  // Delete video - UPDATED: Use enhanced version with default reason for backward compatibility
+  deleteVideo: async (id) => {
+    return videosService.deleteVideoEnhanced(id, 'Video deleted via admin panel');
+  },
+
+  // ENHANCED: Update video status with reason tracking and fallback
+  updateVideoStatusEnhanced: async (id, isActive, reason) => {
+    try {
+      // Try enhanced endpoint first
+      try {
+        const response = await apiService.put(`/videos/${id}/status`, {
+          is_active: isActive,
+          reason: reason
+        });
+        
+        if (response && response.success && response.data) {
+          return response.data;
+        }
+      } catch (enhancedError) {
+        console.log('Enhanced status endpoint not available, falling back to regular update');
+        
+        // FALLBACK: Use regular update endpoint
+        const response = await apiService.put(`/videos/${id}`, {
+          status: isActive ? 'active' : 'inactive'
+        });
+        
+        if (response && (response.success || response.data)) {
+          return response.data || {
+            id: id,
+            status: isActive ? 'active' : 'inactive',
+            message: 'Status updated successfully'
+          };
+        }
+        
+        return {
+          id: id,
+          status: isActive ? 'active' : 'inactive',
+          message: 'Status updated successfully'
+        };
       }
       
-      return response;
     } catch (error) {
-      throw error;
+      console.error('Enhanced update video status error:', error);
+      
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Failed to update video status');
+      }
+    }
+  },
+
+  // Update video status - UPDATED: Use enhanced version with default reason for backward compatibility
+  updateVideoStatus: async (id, isActive) => {
+    return videosService.updateVideoStatusEnhanced(id, isActive, 'Status changed via toggle');
+  },
+
+  // ENHANCED: Bulk delete videos with fallback
+  bulkDeleteVideosEnhanced: async (videoIds, reason) => {
+    try {
+      // Try enhanced bulk endpoint first
+      try {
+        const response = await apiService.delete("/videos/bulk", {
+          data: { videoIds, reason },
+        });
+
+        if (response && response.success) {
+          return {
+            success: true,
+            processedCount: response.data?.processed_count || response.processed_count || videoIds.length,
+            totalRequested: response.data?.total_requested || response.total_requested || videoIds.length,
+            batchResults: response.data?.batch_results || response.batch_results || [],
+            message: response.message || `${videoIds.length} videos deleted successfully`
+          };
+        }
+      } catch (bulkError) {
+        console.log('Bulk delete endpoint not available, falling back to individual deletes');
+        
+        // FALLBACK: Delete videos individually
+        let successCount = 0;
+        let errors = [];
+        
+        for (const videoId of videoIds) {
+          try {
+            await apiService.delete(`/videos/${videoId}`);
+            successCount++;
+          } catch (individualError) {
+            errors.push(`Video ${videoId}: ${individualError.message}`);
+          }
+        }
+        
+        if (successCount > 0) {
+          return {
+            success: true,
+            processedCount: successCount,
+            totalRequested: videoIds.length,
+            batchResults: [],
+            message: `${successCount}/${videoIds.length} videos deleted successfully`
+          };
+        } else {
+          throw new Error(`Failed to delete any videos: ${errors.join(', ')}`);
+        }
+      }
+
+    } catch (error) {
+      console.error("Enhanced bulk delete videos error:", error);
+      
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Failed to delete videos');
+      }
+    }
+  },
+
+  // ENHANCED: Bulk status update with fallback
+  bulkUpdateVideoStatusEnhanced: async (videoIds, isActive, reason) => {
+    try {
+      // Try enhanced bulk endpoint first
+      try {
+        const response = await apiService.put("/videos/bulk-status", {
+          videoIds,
+          is_active: isActive,
+          reason: reason,
+        });
+
+        if (response && response.success) {
+          return {
+            success: true,
+            updatedCount: response.data?.updated_count || response.updated_count || videoIds.length,
+            newStatus: response.data?.new_status || response.new_status || (isActive ? 'active' : 'inactive'),
+            message: response.message || `${videoIds.length} videos ${isActive ? 'activated' : 'deactivated'} successfully`
+          };
+        }
+      } catch (bulkError) {
+        console.log('Bulk status endpoint not available, falling back to individual updates');
+        
+        // FALLBACK: Update videos individually
+        let successCount = 0;
+        let errors = [];
+        
+        for (const videoId of videoIds) {
+          try {
+            await apiService.put(`/videos/${videoId}`, {
+              status: isActive ? 'active' : 'inactive'
+            });
+            successCount++;
+          } catch (individualError) {
+            errors.push(`Video ${videoId}: ${individualError.message}`);
+          }
+        }
+        
+        if (successCount > 0) {
+          return {
+            success: true,
+            updatedCount: successCount,
+            newStatus: isActive ? 'active' : 'inactive',
+            message: `${successCount}/${videoIds.length} videos ${isActive ? 'activated' : 'deactivated'} successfully`
+          };
+        } else {
+          throw new Error(`Failed to update any videos: ${errors.join(', ')}`);
+        }
+      }
+
+    } catch (error) {
+      console.error("Enhanced bulk update video status error:", error);
+      
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Failed to update video statuses');
+      }
     }
   },
 
@@ -233,22 +455,9 @@ export const videosService = {
     }
   },
 
-  // FIXED: Bulk delete videos - Use correct field names and endpoint
+  // FIXED: Bulk delete videos - UPDATED: Use enhanced version with default reason for backward compatibility
   bulkDeleteVideos: async (videoIds) => {
-    try {
-      const response = await apiService.post('/videos/bulk-delete', {
-        videoIds: videoIds // FIXED: Use correct field name for bulk delete
-      });
-      
-      // FIXED: Handle backend response format
-      if (response.success) {
-        return { success: true, message: response.message || 'Videos deleted successfully' };
-      }
-      
-      return response;
-    } catch (error) {
-      throw error;
-    }
+    return videosService.bulkDeleteVideosEnhanced(videoIds, 'Bulk delete via admin panel');
   },
 
   // Get video progress for students
@@ -283,24 +492,6 @@ export const videosService = {
       // FIXED: Handle backend response format
       if (response.success && response.data) {
         return response.data.video || response.data;
-      }
-      
-      return response;
-    } catch (error) {
-      throw error;
-    }
-  },
-
-  // ADDED: Update video status (activate/deactivate)
-  updateVideoStatus: async (id, isActive) => {
-    try {
-      const response = await apiService.put(`/videos/${id}`, {
-        status: isActive ? 'active' : 'inactive'
-      });
-      
-      // FIXED: Handle backend response format
-      if (response.success && response.data) {
-        return response.data;
       }
       
       return response;

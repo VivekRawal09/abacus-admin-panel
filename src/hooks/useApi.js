@@ -129,6 +129,12 @@ export const useApiMutation = (apiFunction, options = {}) => {
 };
 
 // Custom hook for paginated data
+// FIND THIS IN YOUR useApi.js AND REPLACE THE usePaginatedApi FUNCTION
+
+// Custom hook for paginated data
+// FIND THIS IN YOUR useApi.js AND REPLACE THE usePaginatedApi FUNCTION
+
+// Custom hook for paginated data
 export const usePaginatedApi = (key, apiFunction, initialParams = {}) => {
   const [params, setParams] = useState({
     page: 1,
@@ -189,19 +195,51 @@ export const usePaginatedApi = (key, apiFunction, initialParams = {}) => {
     setParams(prev => ({ ...prev, sort: sortField, order: sortOrder, page: 1 }));
   }, []);
 
-  // Extract pagination info from response
-  const paginationInfo = query.data?.pagination || {
+  // FIXED: Extract pagination info correctly from response
+  // The response from service should be: { data: [...], pagination: {...} }
+  const responseData = query.data;
+  
+  let paginationInfo = {
     currentPage: params.page,
     totalPages: 1,
     totalItems: 0,
     pageSize: params.limit
   };
 
+  let extractedData = [];
+
+  if (responseData) {
+    // FIXED: Handle both formats properly
+    if (responseData.pagination && responseData.data) {
+      // Format: { data: [...], pagination: {...} }
+      paginationInfo = responseData.pagination;
+      extractedData = responseData.data;
+    } else if (Array.isArray(responseData)) {
+      // Format: [item1, item2, item3] (direct array)
+      extractedData = responseData;
+      paginationInfo = {
+        currentPage: params.page,
+        totalPages: 1,
+        totalItems: responseData.length,
+        pageSize: params.limit
+      };
+    } else if (responseData.success && responseData.data) {
+      // Format: { success: true, data: [...], pagination: {...} }
+      extractedData = responseData.data;
+      paginationInfo = responseData.pagination || paginationInfo;
+    }
+  }
+
   const hasNextPage = paginationInfo.currentPage < paginationInfo.totalPages;
   const hasPrevPage = paginationInfo.currentPage > 1;
 
   return {
     ...query,
+    // FIXED: Return structured data for component to use easily
+    data: {
+      data: extractedData,           // The actual array of items
+      pagination: paginationInfo     // The pagination info
+    },
     params,
     updateParams,
     nextPage,
@@ -214,8 +252,7 @@ export const usePaginatedApi = (key, apiFunction, initialParams = {}) => {
     pagination: paginationInfo,
     hasNextPage,
     hasPrevPage,
-    // Extract data array from response
-    data: query.data?.data || [],
+    // FIXED: These should extract the actual data and pagination
     totalItems: paginationInfo.totalItems,
     currentPage: paginationInfo.currentPage,
     totalPages: paginationInfo.totalPages,
