@@ -10,6 +10,7 @@ import './styles/globals.css';
 
 
 
+
 // Create a client for React Query
 const queryClient = new QueryClient({
   defaultOptions: {
